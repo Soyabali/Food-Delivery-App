@@ -8,6 +8,7 @@ import 'package:mobileapp/app/router/app_routes.dart';
 import 'package:mobileapp/core/api/api_client.dart';
 import 'package:mobileapp/core/api/api_exception.dart';
 import 'package:mobileapp/core/storage/local_store.dart';
+import 'package:mobileapp/core/widgets/common.dart';
 import 'package:mobileapp/data/mock_backend/mock_backend.dart';
 import 'package:mobileapp/data/mock_backend/mock_seed_data.dart';
 import 'package:mobileapp/data/models.dart';
@@ -150,7 +151,7 @@ void main() {
       latency: Duration.zero,
     );
     final httpBackend = HttpApiClient(
-      baseUrl: 'http://10.0.2.2:3000/api',
+      baseUrl: 'http://10.0.2.2:8000/api',
       timeout: const Duration(seconds: 2),
       tokenProvider: () => session.token,
       httpClient: MockClient((request) async {
@@ -218,5 +219,20 @@ void main() {
       expect(authRedirect(auth, Uri.parse(AppRoutes.login)), AppRoutes.home);
       expect(authRedirect(auth, Uri.parse(AppRoutes.cart)), isNull);
     });
+  });
+
+  test('uploaded image URLs point at the backend host on a device', () {
+    final emulator = Uri.parse('http://10.0.2.2:8000/api');
+    expect(
+      AppImage.resolveUrl('http://localhost:8000/media/a.png', origin: emulator),
+      'http://10.0.2.2:8000/media/a.png',
+    );
+    expect(
+      AppImage.resolveUrl('http://127.0.0.1:8000/media/a.png', origin: emulator),
+      'http://10.0.2.2:8000/media/a.png',
+    );
+    const cdn = 'https://cdn.dummyjson.com/recipe-images/1.webp';
+    expect(AppImage.resolveUrl(cdn, origin: emulator), cdn);
+    expect(AppImage.resolveUrl('http://localhost:8000/media/a.png'), 'http://localhost:8000/media/a.png');
   });
 }

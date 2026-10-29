@@ -5,6 +5,9 @@
 double _toDouble(Object? v) => (v as num).toDouble();
 List<String> _strings(Object? v) =>
     (v as List? ?? const []).map((e) => e.toString()).toList();
+List<DishOption> _options(Object? v) => (v as List? ?? const [])
+    .map((e) => DishOption.fromJson(e as Map<String, dynamic>))
+    .toList();
 
 class DishOption {
   const DishOption({
@@ -68,9 +71,7 @@ class Restaurant {
         badge: j['badge'] as String?,
         popular: j['popular'] as bool? ?? false,
         menuTags: _strings(j['menuTags']),
-        addOns: (j['addOns'] as List? ?? const [])
-            .map((e) => DishOption.fromJson(e as Map<String, dynamic>))
-            .toList(),
+        addOns: _options(j['addOns']),
         hasSpiceLevels: j['hasSpiceLevels'] as bool? ?? false,
         servesAllRecipes: j['servesAllRecipes'] as bool? ?? false,
       );
@@ -111,8 +112,24 @@ class Restaurant {
   }
 }
 
-/// A sellable menu item: a DummyJSON recipe combined with restaurant context
-/// and demo pricing (see `recipe_adapter.dart`).
+/// A menu category from the backend, or a DummyJSON recipe tag (name only).
+class FoodCategory {
+  const FoodCategory({required this.name, this.emoji, this.imageUrl});
+
+  factory FoodCategory.fromJson(Map<String, dynamic> j) => FoodCategory(
+        name: j['name'] as String,
+        emoji: j['emoji'] as String?,
+        imageUrl: j['imageUrl'] as String?,
+      );
+
+  final String name;
+  final String? emoji;
+  final String? imageUrl;
+}
+
+/// A sellable menu item: a backend menu item (`fromJson`), or a DummyJSON
+/// recipe combined with restaurant context and demo pricing (see
+/// `recipe_adapter.dart`).
 class Dish {
   const Dish({
     required this.id,
@@ -140,14 +157,46 @@ class Dish {
     this.addOns = const [],
   });
 
-  /// DummyJSON recipe id.
+  /// Backend `GET /menu-items` shape (camelCase).
+  factory Dish.fromJson(Map<String, dynamic> j) {
+    final tags = _strings(j['tags']);
+    final cuisine = j['cuisine'] as String?;
+    return Dish(
+      id: (j['id'] as num).toInt(),
+      restaurantId: j['restaurantId'] as String,
+      restaurantName: j['restaurantName'] as String,
+      name: j['name'] as String,
+      description: j['description'] as String? ?? '',
+      price: (j['price'] as num).round(),
+      image: j['imageUrl'] as String,
+      isVeg: j['isVeg'] as bool,
+      category: j['category'] as String? ??
+          (tags.isEmpty ? (cuisine ?? '') : tags.first),
+      rating: _toDouble(j['rating'] ?? 0),
+      ratingCount: (j['ratingCount'] as num?)?.toInt() ?? 0,
+      prepTime: j['prepTime'] as String? ?? '',
+      kcal: (j['calories'] as num?)?.toInt(),
+      tag: cuisine,
+      badge: j['badge'] as String?,
+      ingredients: _strings(j['ingredients']),
+      mealTypes: _strings(j['mealTypes']),
+      tags: tags,
+      difficulty: j['difficulty'] as String?,
+      servings: (j['servings'] as num?)?.toInt(),
+      portions: _options(j['portions']),
+      spiceLevels: _strings(j['spiceLevels']),
+      addOns: _options(j['addOns']),
+    );
+  }
+
+  /// Menu item id (backend), or the DummyJSON recipe id.
   final int id;
   final String restaurantId;
   final String restaurantName;
   final String name;
   final String description;
 
-  /// Demo price in rupees for the first portion.
+  /// Price in rupees for the first portion (a demo price for DummyJSON).
   final int price;
   final String image;
   final bool isVeg;

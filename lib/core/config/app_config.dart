@@ -33,7 +33,7 @@ class AppConfig {
       backendMode: mode == 'http' ? BackendMode.http : BackendMode.mock,
       backendBaseUrl: const String.fromEnvironment(
         'BACKEND_BASE_URL',
-        defaultValue: 'http://10.0.2.2:3000/api',
+        defaultValue: 'http://10.0.2.2:8000/api',
       ),
       requestTimeout: const Duration(
         seconds: int.fromEnvironment('API_TIMEOUT_SECONDS', defaultValue: 15),

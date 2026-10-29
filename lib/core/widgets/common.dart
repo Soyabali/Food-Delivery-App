@@ -48,6 +48,22 @@ class AppImage extends StatelessWidget {
   final BorderRadius? borderRadius;
   final IconData placeholderIcon;
 
+  /// Backend the app talks to (null with the mock backend). Set at startup.
+  static Uri? backendOrigin;
+
+  /// The backend stores uploaded images as `http://localhost:8000/media/...`
+  /// (its own view of itself). On a phone or emulator `localhost` is the
+  /// device, so such URLs are pointed at the backend's real host instead.
+  static String resolveUrl(String url, {Uri? origin}) {
+    final backend = origin ?? backendOrigin;
+    final uri = Uri.tryParse(url);
+    if (backend == null || uri == null) return url;
+    if (uri.host != 'localhost' && uri.host != '127.0.0.1') return url;
+    return uri
+        .replace(scheme: backend.scheme, host: backend.host, port: backend.port)
+        .toString();
+  }
+
   @override
   Widget build(BuildContext context) {
     final placeholder = Container(
@@ -63,7 +79,7 @@ class AppImage extends StatelessWidget {
       image = placeholder;
     } else if (source.startsWith('http')) {
       image = Image.network(
-        source,
+        resolveUrl(source),
         width: width,
         height: height,
         fit: fit,

@@ -74,8 +74,27 @@ class AuthService {
     }
   }
 
-  Future<void> requestPasswordReset(String email) =>
-      _backend.post(BackendEndpoints.forgotPassword, body: {'email': email.trim()});
+  /// Asks the backend to email a 6-digit reset code. Returns the code only
+  /// when the on-device mock backend is used (it has no email); a real
+  /// server never returns it.
+  Future<String?> requestPasswordReset(String email) async {
+    final json = await _backend.post(
+      BackendEndpoints.forgotPassword,
+      body: {'email': email.trim()},
+    );
+    return json is Map ? json['demoCode'] as String? : null;
+  }
+
+  /// Sets a new password using the emailed code.
+  Future<void> resetPassword({
+    required String email,
+    required String code,
+    required String newPassword,
+  }) =>
+      _backend.post(
+        BackendEndpoints.resetPassword,
+        body: {'email': email.trim(), 'code': code.trim(), 'newPassword': newPassword},
+      );
 
   Future<void> changePassword({
     required String currentPassword,

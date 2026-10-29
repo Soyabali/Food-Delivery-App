@@ -4,4 +4,7 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+
+    <!-- Debug only: lets the app call the local FastAPI backend over http. -->
+    <application android:networkSecurityConfig="@xml/network_security_config" />
 </manifest>

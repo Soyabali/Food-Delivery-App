@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../../app/navigation/navigation_helpers.dart';
@@ -13,7 +15,10 @@ import '../../../core/widgets/adaptive_dialogs.dart';
 import '../../../core/widgets/app_text_field.dart';
 import '../../../core/widgets/buttons.dart';
 import '../../../core/widgets/common.dart';
+import '../widgets/auth_widgets.dart';
 
+/// Step 1: email -> POST /auth/forgot-password (a 6-digit code is emailed).
+/// Step 2: code + new password -> POST /auth/reset-password.
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
 
@@ -26,9 +31,17 @@ class ForgotPasswordScreen extends StatefulWidget {
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
   final _email = TextEditingController();
+  final _code = TextEditingController();
+  final _password = TextEditingController();
+  final _confirm = TextEditingController();
+  final _passwordFocus = FocusNode();
+  final _confirmFocus = FocusNode();
 
   bool _sending = false;
   bool _sent = false;
+  bool _resetting = false;
+  String? _demoCode;
+  String? _error;
   int _secondsLeft = 0;
   Timer? _timer;
 
@@ -43,18 +56,28 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   @override
   void dispose() {
     _timer?.cancel();
-    _email.dispose();
+    for (final c in [_email, _code, _password, _confirm]) {
+      c.dispose();
+    }
+    _passwordFocus.dispose();
+    _confirmFocus.dispose();
     super.dispose();
   }
 
   bool get _coolingDown => _secondsLeft > 0;
 
-  Future<void> _submit() async {
+  Future<void> _sendCode() async {
     if (_sending || _coolingDown) return;
-    if (!_formKey.currentState!.validate()) return;
+    if (Validators.email(_email.text) != null) {
+      _formKey.currentState!.validate();
+      return;
+    }
     FocusScope.of(context).unfocus();
 
-    setState(() => _sending = true);
+    setState(() {
+      _sending = true;
+      _error = null;
+    });
     final result =
         await context.read<AuthController>().requestPasswordReset(_email.text);
     if (!mounted) return;
@@ -63,8 +86,37 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       showAppSnackBar(context, result.message!);
       return;
     }
-    setState(() => _sent = true);
+    setState(() {
+      _sent = true;
+      _demoCode = result.message;
+      _code.clear();
+    });
     _startCooldown();
+  }
+
+  Future<void> _resetPassword() async {
+    if (_resetting) return;
+    setState(() => _error = null);
+    if (!_formKey.currentState!.validate()) return;
+    FocusScope.of(context).unfocus();
+
+    setState(() => _resetting = true);
+    final result = await context.read<AuthController>().resetPassword(
+          email: _email.text,
+          code: _code.text,
+          newPassword: _password.text,
+        );
+    if (!mounted) return;
+    setState(() => _resetting = false);
+    if (!result.isSuccess) {
+      setState(() => _error = result.message);
+      return;
+    }
+    final auth = context.read<AuthController>();
+    showAppSnackBar(context, 'Password reset. Log in with your new password.');
+    // The backend signed out every device, including this one.
+    if (auth.isAuthenticated) await auth.logout();
+    if (mounted) context.go(AppRoutes.login);
   }
 
   void _startCooldown() {
@@ -79,15 +131,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final String buttonLabel;
-    if (!_sent) {
-      buttonLabel = 'Send Reset Link';
-    } else if (_coolingDown) {
-      buttonLabel = 'Resend in ${_secondsLeft}s';
-    } else {
-      buttonLabel = 'Resend Link';
-    }
-
     return Scaffold(
       body: SafeArea(
         child: Column(
@@ -132,15 +175,18 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                           const SizedBox(height: 16),
                           const Center(child: _EnvelopeIllustration()),
                           const SizedBox(height: 20),
-                          const Text(
-                            'Forgot Password?',
+                          Text(
+                            _sent ? 'Check Your Email' : 'Forgot Password?',
                             textAlign: TextAlign.center,
                             style: AppText.headlineLg,
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Enter your registered email address to receive '
-                            'a password reset link.',
+                            _sent
+                                ? 'Enter the 6-digit code we emailed you and '
+                                    'choose a new password.'
+                                : 'Enter your registered email address and '
+                                    'we\'ll email you a 6-digit reset code.',
                             textAlign: TextAlign.center,
                             style: AppText.bodyMd.copyWith(
                               color: AppColors.onSurfaceVariant,
@@ -154,31 +200,103 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                             icon: Icons.alternate_email,
                             hint: 'name@example.com',
                             filled: false,
+                            enabled: !_sent,
                             keyboardType: TextInputType.emailAddress,
                             textInputAction: TextInputAction.send,
                             autofillHints: const [AutofillHints.email],
                             validator: Validators.email,
-                            onFieldSubmitted: (_) => _submit(),
+                            onFieldSubmitted: (_) => _sendCode(),
+                            labelTrailing: _sent
+                                ? LinkButton(
+                                    label: 'Change',
+                                    onPressed: () => setState(() {
+                                      _sent = false;
+                                      _demoCode = null;
+                                      _error = null;
+                                    }),
+                                  )
+                                : null,
                           ),
                           const SizedBox(height: 16),
-                          PrimaryButton(
-                            label: buttonLabel,
-                            icon: _sent ? Icons.refresh : Icons.send,
-                            loading: _sending,
-                            loadingLabel: 'Sending…',
-                            onPressed: _coolingDown ? null : _submit,
-                          ),
-                          AnimatedSize(
-                            duration: const Duration(milliseconds: 250),
-                            child: _sent
-                                ? Padding(
-                                    padding: const EdgeInsets.only(top: 16),
-                                    child: _SentBanner(
-                                      demo: context.read<AuthController>().isDemoMode,
-                                    ),
-                                  )
-                                : const SizedBox(width: double.infinity),
-                          ),
+                          if (!_sent)
+                            PrimaryButton(
+                              label: _coolingDown
+                                  ? 'Send again in ${_secondsLeft}s'
+                                  : 'Send Reset Code',
+                              icon: Icons.send,
+                              loading: _sending,
+                              loadingLabel: 'Sending…',
+                              onPressed: _coolingDown ? null : _sendCode,
+                            )
+                          else ...[
+                            _SentBanner(
+                              email: _email.text.trim(),
+                              demoCode: _demoCode,
+                            ),
+                            const SizedBox(height: 16),
+                            AppTextField(
+                              label: '6-Digit Code',
+                              controller: _code,
+                              icon: Icons.pin_outlined,
+                              hint: '123456',
+                              keyboardType: TextInputType.number,
+                              textInputAction: TextInputAction.next,
+                              autofillHints: const [AutofillHints.oneTimeCode],
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                                LengthLimitingTextInputFormatter(6),
+                              ],
+                              validator: (v) => RegExp(r'^\d{6}$').hasMatch(v ?? '')
+                                  ? null
+                                  : 'Enter the 6-digit code from the email',
+                              onFieldSubmitted: (_) => _passwordFocus.requestFocus(),
+                              labelTrailing: LinkButton(
+                                label: _coolingDown
+                                    ? 'Resend in ${_secondsLeft}s'
+                                    : 'Resend code',
+                                onPressed:
+                                    _coolingDown || _sending ? null : _sendCode,
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                            AppTextField(
+                              label: 'New Password',
+                              controller: _password,
+                              focusNode: _passwordFocus,
+                              icon: Icons.lock_outline,
+                              hint: 'At least 8 characters',
+                              isPassword: true,
+                              textInputAction: TextInputAction.next,
+                              autofillHints: const [AutofillHints.newPassword],
+                              validator: Validators.newPassword,
+                              onFieldSubmitted: (_) => _confirmFocus.requestFocus(),
+                            ),
+                            const SizedBox(height: 14),
+                            AppTextField(
+                              label: 'Confirm New Password',
+                              controller: _confirm,
+                              focusNode: _confirmFocus,
+                              icon: Icons.lock_reset,
+                              hint: 'Repeat your new password',
+                              isPassword: true,
+                              textInputAction: TextInputAction.done,
+                              validator: (v) =>
+                                  Validators.confirmPassword(v, _password.text),
+                              onFieldSubmitted: (_) => _resetPassword(),
+                            ),
+                            if (_error != null) ...[
+                              const SizedBox(height: 12),
+                              AuthErrorBanner(message: _error!),
+                            ],
+                            const SizedBox(height: 20),
+                            PrimaryButton(
+                              label: 'Reset Password',
+                              icon: Icons.check,
+                              loading: _resetting,
+                              loadingLabel: 'Resetting…',
+                              onPressed: _resetPassword,
+                            ),
+                          ],
                           const SizedBox(height: 24),
                           _HelpBox(
                             secondsLeft: _secondsLeft,
@@ -208,9 +326,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 }
 
 class _SentBanner extends StatelessWidget {
-  const _SentBanner({required this.demo});
+  const _SentBanner({required this.email, this.demoCode});
 
-  final bool demo;
+  final String email;
+
+  /// Only set by the on-device mock backend (it cannot send email).
+  final String? demoCode;
 
   @override
   Widget build(BuildContext context) {
@@ -231,24 +352,24 @@ class _SentBanner extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Link Dispatched!', style: AppText.labelMd),
+                  const Text('Code Sent!', style: AppText.labelMd),
                   const SizedBox(height: 2),
                   Text(
-                    'If an account exists for this email, password '
-                    'instructions are on their way. Check spam if not found.',
+                    'If an account exists for $email, a 6-digit code is on its '
+                    'way. It expires in 15 minutes. Check spam if not found.',
                     style: AppText.bodySm.copyWith(
                       color: AppColors.onSurfaceVariant,
                     ),
                   ),
-                  if (demo) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    'Demo mode: no email was actually sent.',
-                    style: AppText.bodySm.copyWith(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w600,
+                  if (demoCode != null) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      'Demo mode (no email): your code is $demoCode',
+                      style: AppText.bodySm.copyWith(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
                   ],
                 ],
               ),
@@ -288,7 +409,7 @@ class _HelpBox extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             'Check your spam or junk folder, or wait for the cooldown timer '
-            'below before requesting another link.',
+            'below before requesting another code.',
             style: AppText.bodySm.copyWith(
               color: AppColors.onSurfaceVariant,
               height: 1.6,

@@ -283,7 +283,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
-            RequestBuilder<List<String>>(
+            RequestBuilder<List<FoodCategory>>(
               requestKey: _refreshKey,
               request: context.read<CategoryService>().getCategories,
               loading: SizedBox(
@@ -312,10 +312,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     itemCount: shown.length,
                     separatorBuilder: (_, _) => const SizedBox(width: 8),
                     itemBuilder: (context, i) => _CategoryChip(
-                      emoji: emojiForCategory(shown[i]),
-                      label: shown[i],
+                      emoji: shown[i].emoji ?? emojiForCategory(shown[i].name),
+                      imageUrl: shown[i].imageUrl,
+                      label: shown[i].name,
                       highlighted: i == 0,
-                      onTap: () => context.go(AppRoutes.searchCategory(shown[i])),
+                      onTap: () => context.go(AppRoutes.searchCategory(shown[i].name)),
                     ),
                   ),
                 );
@@ -765,10 +766,14 @@ class _CategoryChip extends StatelessWidget {
     required this.emoji,
     required this.label,
     required this.onTap,
+    this.imageUrl,
     this.highlighted = false,
   });
 
   final String emoji;
+
+  /// Photo set in the admin dashboard; shown instead of the emoji.
+  final String? imageUrl;
   final String label;
   final VoidCallback onTap;
   final bool highlighted;
@@ -792,7 +797,15 @@ class _CategoryChip extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(emoji, style: const TextStyle(fontSize: 24)),
+                if (imageUrl != null)
+                  AppImage(
+                    imageUrl,
+                    width: 32,
+                    height: 32,
+                    borderRadius: AppRadius.full,
+                  )
+                else
+                  Text(emoji, style: const TextStyle(fontSize: 24)),
                 const SizedBox(height: 4),
                 Text(
                   label,

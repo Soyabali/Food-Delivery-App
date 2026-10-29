@@ -20,11 +20,16 @@ abstract final class BackendEndpoints {
   static const logout = '/auth/logout';
   static const me = '/auth/me';
   static const forgotPassword = '/auth/forgot-password';
+  static const resetPassword = '/auth/reset-password';
   static const changePassword = '/auth/change-password';
 
   // Catalogue
   static const restaurants = '/restaurants';
   static String restaurant(String id) => '/restaurants/$id';
+  static String restaurantMenu(String id) => '/restaurants/$id/menu';
+  static const menuItems = '/menu-items';
+  static String menuItem(int id) => '/menu-items/$id';
+  static const categories = '/categories';
   static const offers = '/offers';
   static const notifications = '/notifications';
 

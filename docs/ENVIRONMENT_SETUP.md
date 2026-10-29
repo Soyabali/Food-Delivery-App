@@ -17,7 +17,7 @@ DummyJSON plus the on-device mock backend.
 |---|---|---|
 | `FOOD_API_BASE_URL` | `https://dummyjson.com` | Recipe/food provider |
 | `BACKEND_MODE` | `mock` | `mock` = in-app backend; `http` = call `BACKEND_BASE_URL` |
-| `BACKEND_BASE_URL` | `http://10.0.2.2:3000/api` | Your backend (only when `BACKEND_MODE=http`) |
+| `BACKEND_BASE_URL` | `http://10.0.2.2:8000/api` | Your backend (only when `BACKEND_MODE=http`) |
 | `API_TIMEOUT_SECONDS` | `15` | Per-request timeout |
 | `MOCK_LATENCY_MS` | `600` | Simulated mock-backend delay |
 

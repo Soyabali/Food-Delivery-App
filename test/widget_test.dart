@@ -204,6 +204,38 @@ void main() {
     await h.dispose(tester);
   });
 
+  testWidgets('forgot password: code, new password, log in', (tester) async {
+    final h = TestHarness();
+    await h.launch(tester);
+    await tester.tap(find.text('Forgot Password?'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Send Reset Code'));
+    await tester.pumpAndSettle();
+    expect(find.text('Email address is required'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextFormField).first, 'rahul.sharma@example.com');
+    await tester.tap(find.text('Send Reset Code'));
+    await tester.pumpAndSettle();
+    expect(find.text('Code Sent!'), findsOneWidget);
+    final demo = tester.widget<Text>(find.textContaining('your code is')).data!;
+    final code = RegExp(r'(\d{6})').firstMatch(demo)!.group(1)!;
+
+    final fields = find.byType(TextFormField);
+    await tester.enterText(fields.at(1), code);
+    await tester.enterText(fields.at(2), 'BrandNew#2026');
+    await tester.enterText(fields.at(3), 'BrandNew#2026');
+    await tester.ensureVisible(find.text('Reset Password'));
+    await tester.tap(find.text('Reset Password'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(LoginScreen), findsOneWidget);
+    await tester.enterText(find.byType(TextFormField).at(1), 'BrandNew#2026');
+    await h.loginWithDemoAccount(tester);
+    expect(find.byType(HomeScreen), findsOneWidget);
+    await h.dispose(tester);
+  });
+
   testWidgets('placing an order needs internet', (tester) async {
     final h = TestHarness(online: false);
     await h.launch(tester);

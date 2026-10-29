@@ -93,10 +93,14 @@ class _SearchScreenState extends State<SearchScreen> {
     if (_tag != null) {
       final tag = _tag!.toLowerCase();
       final results = await Future.wait([food.byTag(_tag!), restaurants.all()]);
+      final dishes = results[0] as List<Dish>;
+      final serving = {for (final d in dishes) d.restaurantId};
       return (
-        dishes: results[0] as List<Dish>,
+        dishes: dishes,
         restaurants: (results[1] as List<Restaurant>)
-            .where((r) => r.menuTags.any((t) => t.toLowerCase() == tag))
+            .where((r) =>
+                serving.contains(r.id) ||
+                r.menuTags.any((t) => t.toLowerCase() == tag))
             .toList(),
       );
     }

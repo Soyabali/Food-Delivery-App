@@ -85,9 +85,23 @@ class AuthController extends ChangeNotifier {
     );
   }
 
+  /// On success, `message` holds the demo code in mock mode (no email there).
   Future<AuthResult> requestPasswordReset(String email) async {
     try {
-      await _service.requestPasswordReset(email);
+      final demoCode = await _service.requestPasswordReset(email);
+      return AuthResult.success(demoCode);
+    } catch (e) {
+      return AuthResult.failure(toApiException(e).message);
+    }
+  }
+
+  Future<AuthResult> resetPassword({
+    required String email,
+    required String code,
+    required String newPassword,
+  }) async {
+    try {
+      await _service.resetPassword(email: email, code: code, newPassword: newPassword);
       return const AuthResult.success();
     } catch (e) {
       return AuthResult.failure(toApiException(e).message);

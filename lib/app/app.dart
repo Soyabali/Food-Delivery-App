@@ -11,6 +11,7 @@ import '../core/connectivity/connectivity_service.dart';
 import '../core/connectivity/offline_banner.dart';
 import '../core/storage/local_store.dart';
 import '../core/theme/app_theme.dart';
+import '../core/widgets/common.dart';
 import '../data/mock_backend/mock_backend.dart';
 import '../services/address_service.dart';
 import '../services/auth_service.dart';
@@ -54,6 +55,8 @@ class AppServices {
     MockBackend Function(LocalStore store, TokenProvider token)? mockBackend,
   }) async {
     final cfg = config ?? AppConfig.fromEnvironment();
+    AppImage.backendOrigin =
+        cfg.isMockBackend ? null : Uri.parse(cfg.backendBaseUrl);
     final local = store ?? await LocalStore.open();
     final session = SessionStore(local);
 
@@ -78,6 +81,7 @@ class AppServices {
             tokenProvider: () => session.token,
           );
 
+    final catalog = cfg.isMockBackend ? null : backend;
     final restaurants = RestaurantService(backend);
     final auth = AuthController(AuthService(backend, session), cfg);
     Future<void> expire() => auth.expireSession();
@@ -95,9 +99,11 @@ class AppServices {
         UserService(backend),
         onUnauthorized: expire,
       ),
-      food: FoodService(foodApi, restaurants),
+      // Real backend: dishes and categories are the ones managed in the
+      // admin dashboard. Mock backend: DummyJSON recipes.
+      food: FoodService(foodApi, restaurants, backend: catalog),
       restaurants: restaurants,
-      categories: CategoryService(foodApi),
+      categories: CategoryService(foodApi, backend: catalog),
       offers: OfferService(backend),
     );
   }

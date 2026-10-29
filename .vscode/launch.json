@@ -13,6 +13,17 @@
       "type": "dart",
       "program": "lib/main.dart",
       "args": ["--dart-define-from-file=.env"]
+    },
+    {
+      "name": "FastAPI backend (PostgreSQL)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": ["app.main:app", "--reload", "--host", "0.0.0.0", "--port", "8000"],
+      "cwd": "${workspaceFolder}/backend",
+      "python": "${workspaceFolder}/backend/.venv/Scripts/python.exe",
+      "jinja": true,
+      "justMyCode": true
     }
   ]
 }

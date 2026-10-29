@@ -67,7 +67,7 @@ void main() {
     });
 
     test('GET /recipes/tags', () async {
-      expect(await categories.getCategories(), containsAll(['Pizza', 'Pakistani', 'Dessert']));
+      expect((await categories.getCategories()).map((c) => c.name), containsAll(['Pizza', 'Pakistani', 'Dessert']));
     });
 
     test('GET /recipes/tag/{tag} (restaurant menus)', () async {

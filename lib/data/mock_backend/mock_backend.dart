@@ -107,6 +107,8 @@ class MockBackend implements ApiClient {
         return _publicUser(_requireUser());
       case ('POST', ['auth', 'forgot-password']):
         return _forgotPassword(body);
+      case ('POST', ['auth', 'reset-password']):
+        return _resetPassword(body);
       case ('POST', ['auth', 'change-password']):
         return _changePassword(body);
 
@@ -279,10 +281,54 @@ class MockBackend implements ApiClient {
     return null;
   }
 
+  /// The mock can't send email, so it returns the code as `demoCode` for the
+  /// app to display. A real backend emails it and never returns it.
   Future<Object?> _forgotPassword(Map<String, dynamic> body) async {
-    _str(body, 'email');
-    // Same response whether or not the account exists. No email is sent.
-    return {'message': 'If an account exists, a reset link has been sent.'};
+    final email = _str(body, 'email').trim().toLowerCase();
+    final response = <String, dynamic>{
+      'message': "If an account exists for this email, we've sent a 6-digit reset code.",
+    };
+    if (_users.containsKey(email)) {
+      final code = _random.nextInt(1000000).toString().padLeft(6, '0');
+      await _store.writeJson('${_prefix}reset.$email', {
+        'code': code,
+        'expiresAt': _clock().add(const Duration(minutes: 15)).toIso8601String(),
+        'attempts': 0,
+      });
+      response['demoCode'] = code;
+    }
+    return response;
+  }
+
+  Future<Object?> _resetPassword(Map<String, dynamic> body) async {
+    final email = _str(body, 'email').trim().toLowerCase();
+    final code = _str(body, 'code').trim();
+    final next = _str(body, 'newPassword');
+    if (next.length < 8) _fail(400, 'Password must be at least 8 characters.');
+    final key = '${_prefix}reset.$email';
+    final entry = _store.readJson(key) as Map<String, dynamic>?;
+    final user = _users[email] as Map<String, dynamic>?;
+    if (entry == null ||
+        user == null ||
+        DateTime.parse(entry['expiresAt'] as String).isBefore(_clock())) {
+      _fail(400, 'That code is invalid or has expired. Request a new one.');
+    }
+    final attempts = entry['attempts'] as int;
+    if (attempts >= 5) _fail(429, 'Too many wrong codes. Request a new code.');
+    if (entry['code'] != code) {
+      await _store.writeJson(key, {...entry, 'attempts': attempts + 1});
+      final left = 4 - attempts;
+      _fail(400, left > 0 ? 'Incorrect code. $left attempts left.' : 'Too many wrong codes. Request a new code.');
+    }
+    final salt = _randomHex(16);
+    final users = _users;
+    users[email] = {...user, 'salt': salt, 'passwordHash': _hash(salt, next)};
+    await _store.writeJson('${_prefix}users', users);
+    await _store.remove(key);
+    // End every session of this user.
+    final sessions = _sessions..removeWhere((_, owner) => owner == email);
+    await _store.writeJson('${_prefix}sessions', sessions);
+    return {'message': 'Password reset. You can now log in with your new password.'};
   }
 
   Future<Object?> _changePassword(Map<String, dynamic> body) async {

@@ -44,7 +44,8 @@ Errors return `{ "message": "…" }` with the listed status.
 | POST | `/auth/register` *public* | Create account + sign in | `{name, email, phone, password}` | `{token, user}` | 400 (password < 8), 409 email exists |
 | POST | `/auth/logout` | Invalidate token | — | `null` | — |
 | GET | `/auth/me` | Current user (session restore, profile) | — | `user` | 401 |
-| POST | `/auth/forgot-password` *public* | Reset request (no email sent) | `{email}` | `{message}` (same whether or not the account exists) | 400 |
+| POST | `/auth/forgot-password` *public* | Send 6-digit reset code | `{email}` | `{message}` (same whether or not the account exists). The mock backend also returns `demoCode` because it can't send email; FastAPI emails it. | 400 |
+| POST | `/auth/reset-password` *public* | Set new password with the code | `{email, code, newPassword}` | `{message}`; ends all sessions | 400 wrong/expired code, 429 too many attempts |
 | POST | `/auth/change-password` | Change password | `{currentPassword, newPassword}` | `{message}` | 400 wrong current / same / too short, 401 |
 
 ### Catalogue

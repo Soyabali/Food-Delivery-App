@@ -230,6 +230,41 @@ void main() {
     expect((await errorOf(s.backend.get(BackendEndpoints.me))).statusCode, 401);
   });
 
+  test('password reset with emailed code', () async {
+    final s = Session(store);
+    await s.login();
+    final res = await s.backend.post(
+      BackendEndpoints.forgotPassword,
+      body: {'email': MockSeedData.demoEmail},
+    );
+    final code = res['demoCode'] as String;
+    expect(code, matches(RegExp(r'^\d{6}$')));
+
+    final wrong = await errorOf(s.backend.post(BackendEndpoints.resetPassword, body: {
+      'email': MockSeedData.demoEmail,
+      'code': code == '000000' ? '111111' : '000000',
+      'newPassword': 'BrandNew#2026',
+    }));
+    expect(wrong.message, 'Incorrect code. 4 attempts left.');
+
+    await s.backend.post(BackendEndpoints.resetPassword, body: {
+      'email': MockSeedData.demoEmail,
+      'code': code,
+      'newPassword': 'BrandNew#2026',
+    });
+    // Old session ended, old password rejected, new one works.
+    expect((await errorOf(s.backend.get(BackendEndpoints.me))).statusCode, 401);
+    expect((await errorOf(s.login())).statusCode, 401);
+    await s.login(MockSeedData.demoEmail, 'BrandNew#2026');
+
+    // Unknown email: same message, no code.
+    final unknown = await s.backend.post(
+      BackendEndpoints.forgotPassword,
+      body: {'email': 'nobody@example.com'},
+    );
+    expect(unknown['demoCode'], isNull);
+  });
+
   test('unknown endpoints return 404', () async {
     final s = Session(store);
     expect((await errorOf(s.backend.get('/nope'))).statusCode, 404);
