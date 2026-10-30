@@ -318,7 +318,7 @@ class AdminOrderOut(CamelModel):
     status: str
     payment_method: str
     payment_status: str
-    customer_id: int
+    customer_id: int | None  # None once the customer deleted their account
     customer_name: str
     customer_phone: str | None
     restaurant_id: int

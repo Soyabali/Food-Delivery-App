@@ -21,9 +21,10 @@ from app.models.enums import (
     UserRole,
 )
 from app.models.media import MediaAsset
-from app.models.user import Address, PasswordResetToken, User, UserSession
+from app.models.user import AccountDeletionCode, Address, PasswordResetToken, User, UserSession
 
 __all__ = [
+    "AccountDeletionCode",
     "AddOn",
     "Address",
     "Base",

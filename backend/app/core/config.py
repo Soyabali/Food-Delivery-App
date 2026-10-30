@@ -28,6 +28,22 @@ class Settings(BaseSettings):
     password_reset_max_attempts: int = 5
     password_reset_resend_seconds: int = 45
 
+    # Public account deletion page (/delete-account, used for Google Play).
+    # A 6-digit code proves ownership; verifying it gives a short-lived
+    # deletion token that the final "Confirm delete" step must present.
+    account_deletion_code_minutes: int = 15
+    account_deletion_max_attempts: int = 5
+    account_deletion_resend_seconds: int = 60
+    account_deletion_confirm_minutes: int = 10
+    # Per client IP, per 15 minutes (in-memory, per server process).
+    account_deletion_requests_per_ip: int = 5
+    account_deletion_verifies_per_ip: int = 20
+    # Anonymised order records are kept this long for tax/accounting law.
+    # Shown on the public page: confirm the right period with your accountant.
+    order_retention_years: int = 8
+    # Shown on the deletion page for questions (optional).
+    support_email: str = ""
+
     # Outgoing email (SMTP). Leave SMTP_HOST empty in development: emails are
     # then printed in the server log instead of being sent.
     # Gmail: host smtp.gmail.com, port 587, username = your Gmail address,

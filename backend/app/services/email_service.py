@@ -50,6 +50,30 @@ def send_email(to: str, subject: str, text: str, html: str | None = None) -> Non
         log.error("Failed to send email to %s: %s", to, exc)
 
 
+def send_account_deletion_code(to: str, name: str, code: str, minutes: int) -> None:
+    subject = f"{code} is your Apna Food account deletion code"
+    text = (
+        f"Hi {name},\n\n"
+        "Someone asked to delete the Apna Food account for this email address.\n\n"
+        f"If it was you, enter this code on the deletion page: {code}\n\n"
+        f"It expires in {minutes} minutes. If you didn't ask for this, ignore this email; "
+        "your account stays as it is.\n\n"
+        "- Team Apna Food"
+    )
+    html = f"""\
+<div style="font-family:Arial,sans-serif;max-width:480px;margin:auto;padding:24px;color:#121c2a">
+  <h2 style="color:#ff6b35;margin:0 0 16px">Apna Food</h2>
+  <p>Hi {name},</p>
+  <p>Someone asked to <b>delete</b> the Apna Food account for this email address.
+     If it was you, enter this code on the deletion page:</p>
+  <p style="font-size:32px;font-weight:bold;letter-spacing:8px;background:#eff4ff;
+            padding:16px;text-align:center;border-radius:12px">{code}</p>
+  <p style="color:#594139">It expires in {minutes} minutes. If you didn't ask for this,
+     ignore this email; your account stays as it is.</p>
+</div>"""
+    send_email(to, subject, text, html)
+
+
 def send_password_reset_code(to: str, name: str, code: str, minutes: int) -> None:
     subject = f"{code} is your Apna Food password reset code"
     text = (

@@ -98,6 +98,30 @@ class PasswordResetToken(Base):
     attempts: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default="0")
 
 
+class AccountDeletionCode(Base):
+    """Ownership check for the public /delete-account page. The emailed
+    6-digit code and the deletion token it is exchanged for are stored only
+    as hashes. Removed together with the account (CASCADE)."""
+
+    __tablename__ = "account_deletion_codes"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    code_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # Wrong guesses so far; locked after ACCOUNT_DELETION_MAX_ATTEMPTS.
+    attempts: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default="0")
+    # Set once the code is verified: the token "Confirm delete" must present.
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    confirm_token_hash: Mapped[str | None] = mapped_column(String(64), unique=True)
+    confirm_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class Address(TimestampMixin, Base):
     __tablename__ = "addresses"
     __table_args__ = (

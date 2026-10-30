@@ -41,7 +41,7 @@ through the same API. The mobile endpoints follow the contract in
 
 ## 1. Database schema
 
-**20 tables · 29 foreign keys · 23 check constraints · 6 enum types.**
+**21 tables · 30 foreign keys · 23 check constraints · 6 enum types.**
 Money is `NUMERIC(10,2)` in rupees. Timestamps are `TIMESTAMPTZ`. Lists such
 as tags and ingredients are PostgreSQL `TEXT[]` arrays with GIN indexes.
 
@@ -53,6 +53,7 @@ erDiagram
     users |o--o| addresses : "selected_address_id"
     users ||--o{ user_sessions : "signs in"
     users ||--o{ password_reset_tokens : "resets"
+    users ||--o{ account_deletion_codes : "deletes account"
     users |o--o{ media_assets : "uploads"
     users ||--o| carts : "owns one"
     users ||--o{ orders : "places"
@@ -92,6 +93,7 @@ erDiagram
 | `users` | Customers and admins | `email` unique case-insensitive (`lower(email)` index) · `password_hash` (Argon2id) · `role` enum `customer/admin` · `is_active` · `selected_address_id` → `addresses` (SET NULL) |
 | `user_sessions` | One row per signed-in device | `token_hash` = SHA-256 of the bearer token (never the token itself) · `expires_at` · `revoked_at` (logout) |
 | `password_reset_tokens` | Emailed 6-digit reset codes | `token_hash` (SHA-256 of user id + code) · `expires_at` · `used_at` · `attempts` (locked after 5) · only the newest code per user is kept |
+| `account_deletion_codes` | Ownership check for the public `/delete-account` page | `code_hash` (SHA-256 of the 6-digit code) · `expires_at` · `attempts` (locked after 5) · after verifying: `confirm_token_hash` + `confirm_expires_at` (10 min) · CASCADE with the user |
 | `media_assets` | Images uploaded from the dashboard (Media Library) | `file_name` (in `MEDIA_DIR`) and `url` unique · `original_name` · `content_type` · `size_bytes` · `uploaded_by_id` → users (SET NULL). Restaurants, menu items, categories and offers reference an image by `image_url` = `url` |
 | `addresses` | Saved delivery addresses | `user_id` → users (CASCADE) · `label`, `line`, `icon`, `latitude/longitude` (range-checked) · **at most one `is_default` per user** (partial unique index) |
 
@@ -121,7 +123,7 @@ erDiagram
 | `carts` | One active cart per user | `user_id` **unique** · `restaurant_id` (a cart holds one restaurant's food) · `offer_id` (applied coupon) · `instructions` |
 | `cart_items` | Cart lines | `menu_item_id`, `variant_id`, `spice_level`, `quantity 1–20`, `note` · **prices are not stored**: they're calculated live from the menu |
 | `cart_item_add_ons` | Line ↔ add-on (many-to-many) | composite PK, both CASCADE |
-| `orders` | Placed orders | `order_number` unique (`AF-12345`) · `status` enum `placed → preparing → out_for_delivery → delivered / cancelled` · `payment_method` `upi/card/cod` · `payment_status` `pending/paid/failed/refunded` · **address and money are snapshots** (`item_total`, `delivery_fee`, `taxes`, `discount`, `total`) · `user_id`, `restaurant_id` **RESTRICT** (history is never lost) |
+| `orders` | Placed orders | `order_number` unique (`AF-12345`) · `status` enum `placed → preparing → out_for_delivery → delivered / cancelled` · `payment_method` `upi/card/cod` · `payment_status` `pending/paid/failed/refunded` · **address and money are snapshots** (`item_total`, `delivery_fee`, `taxes`, `discount`, `total`) · `restaurant_id` **RESTRICT** (history is never lost) · `user_id` **SET NULL**: when a customer deletes their account the order is kept, anonymised (see section 7) |
 | `order_items` | Order lines (snapshot) | `name`, `image_url`, `unit_price`, `variant_name`, `add_on_names TEXT[]`, `quantity`, `line_total` · `menu_item_id` SET NULL if the dish is deleted later |
 | `order_status_history` | Tracking timeline | every status change with `changed_at`, `changed_by_user_id`, `note` |
 
@@ -189,7 +191,7 @@ ADMIN_PASSWORD=a-strong-admin-password
 ### 2.3 Create tables, add starter data, run
 
 ```powershell
-alembic upgrade head              # creates all 20 tables
+alembic upgrade head              # creates all 21 tables
 python scripts/seed.py            # 8 restaurants, 50 dishes, 13 categories, 2 offers, admin + demo user
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
@@ -258,6 +260,9 @@ Base URL: `http://<host>:8000/api`. Every error looks like
 | PUT | `/cart/instructions` | user | `{instructions}` |
 | POST | `/orders` | user | `{addressId, paymentMethod}` → order (201) |
 | GET | `/orders`, `/orders/{orderNumber}` | user | History / tracking |
+| POST | `/account-deletion/request` | – | `{email}` → emails a 6-digit code (same reply for any email) |
+| POST | `/account-deletion/verify` | – | `{email, code}` → `{deletionToken, expiresInSeconds}`; 409 if an order is in progress or the account is an admin |
+| POST | `/account-deletion/confirm` | – | `{deletionToken}` → account deleted, orders anonymised |
 
 Cart totals rules come from `.env`:
 - Delivery is free at `FREE_DELIVERY_THRESHOLD` (₹199) or more. Otherwise the
@@ -334,7 +339,7 @@ flutter test test/live/backend_live_test.dart --dart-define=BACKEND_URL=http://l
 - Real payment gateway: orders record the method with `payment_status=pending`.
 - SMS. (Email works through SMTP: see section 6.)
 - Restaurant-owner logins, rider/delivery app, reviews and ratings input.
-- Rate limiting and HTTPS (put the API behind a reverse proxy such as Nginx or
+- Login rate limiting (the account deletion endpoints are rate limited) and HTTPS (put the API behind a reverse proxy such as Nginx or
   Caddy, or a cloud load balancer, when deploying).
 - Cloud image storage: uploads go to `backend/media/`. Use S3 or Cloudinary in
   production.
@@ -365,3 +370,32 @@ SMTP_FROM=Apna Food <your.address@gmail.com>
 Gmail allows roughly 500 emails a day. For production, use a transactional
 provider (SendGrid, Mailgun, Amazon SES, Brevo). They all accept the same SMTP
 settings.
+
+---
+
+## 7. Account deletion (Google Play "Delete account URL")
+
+Public page: **`GET /delete-account`** (served by this backend from
+`backend/web/delete-account/index.html`). It works without the app installed.
+
+| Step | Endpoint | What happens |
+|---|---|---|
+| 1. Email | `POST /api/account-deletion/request` | Emails a 6-digit code (`ACCOUNT_DELETION_CODE_MINUTES`, default 15). The reply is the same whether or not the email is registered. Resend cooldown `ACCOUNT_DELETION_RESEND_SECONDS`. |
+| 2. Verify | `POST /api/account-deletion/verify` | Checks the code (locked after `ACCOUNT_DELETION_MAX_ATTEMPTS` wrong tries) and returns a one-time `deletionToken` valid `ACCOUNT_DELETION_CONFIRM_MINUTES` (10). Refuses admins and customers with an order in progress (409). |
+| 3. Confirm | `POST /api/account-deletion/confirm` | Deletes the account in one transaction. |
+
+Requests are also limited per client IP (`ACCOUNT_DELETION_REQUESTS_PER_IP`,
+`ACCOUNT_DELETION_VERIFIES_PER_IP` per 15 minutes, in memory per process).
+
+**Deleted:** the `users` row and, by CASCADE, `addresses`, `user_sessions`
+(signed out everywhere), `password_reset_tokens`, `account_deletion_codes`,
+`carts`/`cart_items`, favourites and the user's own `notifications`.
+
+**Kept, anonymised:** `orders` stay for tax/accounting with `user_id = NULL`,
+delivery address replaced, coordinates/instructions and item notes cleared.
+The page states the retention period from `ORDER_RETENTION_YEARS` (default 8;
+confirm the right period with your accountant). The dashboard shows these
+orders as "Deleted customer".
+
+Logic: `app/services/account_deletion.py`; routes:
+`app/api/routes/account_deletion.py`; tests: `tests/test_account_deletion.py`.

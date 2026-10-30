@@ -75,6 +75,39 @@ CREATE TYPE public.user_role AS ENUM (
 );
 
 --
+-- Name: account_deletion_codes; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.account_deletion_codes (
+    id bigint NOT NULL,
+    user_id bigint NOT NULL,
+    code_hash character varying(64) NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    attempts smallint DEFAULT '0'::smallint NOT NULL,
+    verified_at timestamp with time zone,
+    confirm_token_hash character varying(64),
+    confirm_expires_at timestamp with time zone
+);
+
+--
+-- Name: account_deletion_codes_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.account_deletion_codes_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+--
+-- Name: account_deletion_codes_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.account_deletion_codes_id_seq OWNED BY public.account_deletion_codes.id;
+
+--
 -- Name: add_ons; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -540,7 +573,7 @@ ALTER SEQUENCE public.order_status_history_id_seq OWNED BY public.order_status_h
 CREATE TABLE public.orders (
     id bigint NOT NULL,
     order_number character varying(20) NOT NULL,
-    user_id bigint NOT NULL,
+    user_id bigint,
     restaurant_id bigint NOT NULL,
     status public.order_status DEFAULT 'placed'::public.order_status NOT NULL,
     payment_method public.payment_method NOT NULL,
@@ -733,6 +766,12 @@ CREATE SEQUENCE public.users_id_seq
 ALTER SEQUENCE public.users_id_seq OWNED BY public.users.id;
 
 --
+-- Name: account_deletion_codes id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_deletion_codes ALTER COLUMN id SET DEFAULT nextval('public.account_deletion_codes_id_seq'::regclass);
+
+--
 -- Name: add_ons id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -833,6 +872,13 @@ ALTER TABLE ONLY public.user_sessions ALTER COLUMN id SET DEFAULT nextval('publi
 --
 
 ALTER TABLE ONLY public.users ALTER COLUMN id SET DEFAULT nextval('public.users_id_seq'::regclass);
+
+--
+-- Name: account_deletion_codes pk_account_deletion_codes; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_deletion_codes
+    ADD CONSTRAINT pk_account_deletion_codes PRIMARY KEY (id);
 
 --
 -- Name: add_ons pk_add_ons; Type: CONSTRAINT; Schema: public; Owner: -
@@ -975,6 +1021,20 @@ ALTER TABLE ONLY public.users
     ADD CONSTRAINT pk_users PRIMARY KEY (id);
 
 --
+-- Name: account_deletion_codes uq_account_deletion_codes_code_hash; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_deletion_codes
+    ADD CONSTRAINT uq_account_deletion_codes_code_hash UNIQUE (code_hash);
+
+--
+-- Name: account_deletion_codes uq_account_deletion_codes_confirm_token_hash; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_deletion_codes
+    ADD CONSTRAINT uq_account_deletion_codes_confirm_token_hash UNIQUE (confirm_token_hash);
+
+--
 -- Name: carts uq_carts_user_id; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1043,6 +1103,12 @@ ALTER TABLE ONLY public.restaurants
 
 ALTER TABLE ONLY public.user_sessions
     ADD CONSTRAINT uq_user_sessions_token_hash UNIQUE (token_hash);
+
+--
+-- Name: ix_account_deletion_codes_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_account_deletion_codes_user_id ON public.account_deletion_codes USING btree (user_id);
 
 --
 -- Name: ix_add_ons_restaurant_id; Type: INDEX; Schema: public; Owner: -
@@ -1181,6 +1247,13 @@ CREATE UNIQUE INDEX uq_menu_item_variants_one_default ON public.menu_item_varian
 --
 
 CREATE UNIQUE INDEX uq_users_email_lower ON public.users USING btree (lower((email)::text));
+
+--
+-- Name: account_deletion_codes fk_account_deletion_codes_user_id_users; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.account_deletion_codes
+    ADD CONSTRAINT fk_account_deletion_codes_user_id_users FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
 
 --
 -- Name: add_ons fk_add_ons_restaurant_id_restaurants; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -1362,7 +1435,7 @@ ALTER TABLE ONLY public.orders
 --
 
 ALTER TABLE ONLY public.orders
-    ADD CONSTRAINT fk_orders_user_id_users FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE RESTRICT;
+    ADD CONSTRAINT fk_orders_user_id_users FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE SET NULL;
 
 --
 -- Name: password_reset_tokens fk_password_reset_tokens_user_id_users; Type: FK CONSTRAINT; Schema: public; Owner: -

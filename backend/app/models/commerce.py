@@ -100,9 +100,9 @@ class Order(TimestampMixin, Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     order_number: Mapped[str] = mapped_column(String(20), nullable=False, unique=True)  # AF-12345
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
-    )
+    # NULL once the customer deletes their account: the order is kept,
+    # anonymised, for accounting (see services/account_deletion.py).
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     restaurant_id: Mapped[int] = mapped_column(
         ForeignKey("restaurants.id", ondelete="RESTRICT"), nullable=False, index=True
     )
@@ -137,7 +137,7 @@ class Order(TimestampMixin, Base):
     eta: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
-    user: Mapped["User"] = relationship()  # noqa: F821 - resolved by name
+    user: Mapped["User | None"] = relationship()  # noqa: F821 - resolved by name
     restaurant: Mapped[Restaurant] = relationship()
     items: Mapped[list[OrderItem]] = relationship(
         back_populates="order", cascade="all, delete-orphan", order_by="OrderItem.id"

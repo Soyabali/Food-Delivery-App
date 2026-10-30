@@ -108,8 +108,9 @@ def _order_row(o: Order) -> dict:
         "payment_method": o.payment_method.value,
         "payment_status": o.payment_status.value,
         "customer_id": o.user_id,
-        "customer_name": o.user.full_name,
-        "customer_phone": o.user.phone,
+        # NULL user = the customer deleted their account (order anonymised).
+        "customer_name": o.user.full_name if o.user else "Deleted customer",
+        "customer_phone": o.user.phone if o.user else None,
         "restaurant_name": o.restaurant.name,
         "item_count": sum(i.quantity for i in o.items),
     }
@@ -156,7 +157,7 @@ def list_orders(
 ):
     stmt = (
         select(Order)
-        .join(Order.user)
+        .outerjoin(Order.user)
         .options(selectinload(Order.items), selectinload(Order.restaurant), selectinload(Order.user))
     )
     if status_filter is not None:

@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
-from app.api.routes import auth, cart, catalog, me, orders
+from app.api.routes import account_deletion, auth, cart, catalog, me, orders
 from app.api.routes.admin import catalog as admin_catalog
 from app.api.routes.admin import operations as admin_operations
 from app.core.config import get_settings
@@ -35,7 +35,7 @@ app.add_middleware(
 register_error_handlers(app)
 
 api = APIRouter(prefix="/api")
-for module in (auth, catalog, me, cart, orders):
+for module in (auth, catalog, me, cart, orders, account_deletion):
     api.include_router(module.router)
 
 admin = APIRouter(prefix="/admin")
@@ -43,6 +43,8 @@ admin.include_router(admin_catalog.router)
 admin.include_router(admin_operations.router)
 api.include_router(admin)
 app.include_router(api)
+# Public web page: https://<your-domain>/delete-account (Google Play).
+app.include_router(account_deletion.page_router)
 
 Path(settings.media_dir).mkdir(parents=True, exist_ok=True)
 app.mount("/media", StaticFiles(directory=settings.media_dir), name="media")

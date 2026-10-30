@@ -61,6 +61,24 @@ class ChangePasswordIn(CamelModel):
     new_password: str = Field(min_length=8, max_length=128)
 
 
+class DeletionRequestIn(CamelModel):
+    email: EmailStr
+
+
+class DeletionVerifyIn(CamelModel):
+    email: EmailStr
+    code: str = Field(pattern=r"^\d{6}$", description="6-digit code from the email")
+
+
+class DeletionVerifiedOut(CamelModel):
+    deletion_token: str = Field(description="Send to /account-deletion/confirm")
+    expires_in_seconds: int
+
+
+class DeletionConfirmIn(CamelModel):
+    deletion_token: str = Field(min_length=20, max_length=100)
+
+
 # ----------------------------------------------------------- catalogue
 
 
